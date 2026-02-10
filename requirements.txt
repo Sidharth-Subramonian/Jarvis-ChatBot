@@ -1,0 +1,10 @@
+google-genai
+python-dotenv
+openai
+ddgs
+pytz
+openwakeword
+faster-whisper
+piper-tts
+pyaudio
+time

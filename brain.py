@@ -8,6 +8,7 @@ import os
 import time
 
 from config import gemini_client, groq_client, MODEL_GEMINI, MODEL_GROQ
+from music_bot import play_music, stop_music
 from ha_bridge import control_home_assistant
 
 # Standard RPi Suppressions
@@ -42,11 +43,29 @@ def run_jarvis():
         }
     }
 
+    music_tool = {
+        "name": "play_music",
+        "description": "Searches for and plays music from YouTube on the Pi speakers.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {"type": "STRING", "description": "The name of the song or artist."}
+            },
+            "required": ["query"]
+        }
+    }
+
+    stop_music_tool = {
+        "name": "stop_music",
+        "description": "Stops any currently playing music.",
+        "parameters": {"type": "OBJECT", "properties": {}}
+    }
+    
     gemini_chat = gemini_client.chats.create(
         model=MODEL_GEMINI,
         config={
-            "system_instruction": "You are Jarvis, a concise AI butler. Use tools for hardware control.",
-            "tools": [types.Tool(function_declarations=[ha_tool])]
+            "system_instruction": "You are Jarvis, a concise AI coordinator. Use tools for home control and music.",
+            "tools": [types.Tool(function_declarations=[ha_tool, music_tool, stop_music_tool])]
         }
     )
 
@@ -93,8 +112,18 @@ def run_jarvis():
                         
                         if response.candidates[0].content.parts[0].function_call:
                             fn = response.candidates[0].content.parts[0].function_call
-                            result = control_home_assistant(**fn.args)
-                            response = gemini_chat.send_message(f"[System Tool Result: {result}]")
+                            
+                            # Existing HA logic
+                            if fn.name == "control_home_assistant":
+                                result = control_home_assistant(**fn.args)
+                                response = gemini_chat.send_message(f"[System Tool Result: {result}]")
+                                jarvis_msg = response.text
+                            
+                            # NEW Music logic
+                            elif fn.name == "play_music":
+                                jarvis_msg = play_music(**fn.args)
+                            elif fn.name == "stop_music":
+                                jarvis_msg = stop_music()
                         
                         jarvis_msg = response.text
 
@@ -112,6 +141,7 @@ def run_jarvis():
                                     "2. ONLY if the user specifically asks to turn something on/off or set a speed, use the format: 'EXECUTE: [type], [name], [action]'. "
                                     "3. Devices you control: 'sidhu fan' and 'sidhu fan led'. "
                                     "4. For hardware: 'EXECUTE: fan, sidhu fan, [on/off/1-6]' or 'EXECUTE: light, sidhu fan led, [on/off]'."
+                                    "5. For music: 'EXECUTE: music, play, [song]' or 'EXECUTE: music, stop, now'."
                                 )
                             }
                             ] + history[-5:]
@@ -120,10 +150,16 @@ def run_jarvis():
                             jarvis_msg = groq_resp.choices[0].message.content
                             
                             if "EXECUTE:" in jarvis_msg:
-                                parts = jarvis_msg.replace("EXECUTE:", "").strip().split(",")
-                                if len(parts) >= 3:
-                                    res = control_home_assistant(parts[0].strip(), parts[1].strip(), parts[2].strip())
-                                    jarvis_msg = res # Use hardware result as the spoken response
+                                if "music" in jarvis_msg:
+                                    if "play" in jarvis_msg:
+                                        query = jarvis_msg.split(",")[-1].strip()
+                                        jarvis_msg = play_music(query)
+                                    else:
+                                        jarvis_msg = stop_music()
+                                else:
+                                    # Existing hardware parser
+                                    parts = jarvis_msg.replace("EXECUTE:", "").strip().split(",")
+                                    jarvis_msg = control_home_assistant(parts[0].strip(), parts[1].strip(), parts[2].strip())
                         else:
                             print(f"Gemini Error: {e}")
                             jarvis_msg = "I'm having trouble connecting to my primary brain, sir."

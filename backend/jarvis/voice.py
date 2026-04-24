@@ -223,9 +223,10 @@ class VoiceSystem:
             
         self.stream.stop_stream()
         
+        # Use aplay with explicit headphones device (hw:2,0)
         command = (
-            f'echo "{text}" | ./piper/piper --model {TTS_MODEL} '
-            f'--output_raw | aplay -r {TTS_SAMPLE_RATE} -f S16_LE -t raw'
+            f'echo "{text}" | piper --model {TTS_MODEL} '
+            f'--output_raw | aplay -D hw:2,0 -r {TTS_SAMPLE_RATE} -f S16_LE -t raw 2>/dev/null'
         )
         
         try:

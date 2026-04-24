@@ -380,3 +380,8 @@ async def jarvis_command(request: JarvisCommand):
     # For now, we'll just log it as the brain is designed for voice loop
     print(f"Received text command for Jarvis: {request.command}")
     return {"message": "Text command received", "command": request.command}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

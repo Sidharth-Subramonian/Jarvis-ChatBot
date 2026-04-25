@@ -12,6 +12,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.piconsole.ui.theme.PiConsoleTheme
 import com.piconsole.navigation.PiConsoleNavHost
+import com.google.firebase.messaging.FirebaseMessaging
+import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import com.piconsole.network.RetrofitClient
+import com.piconsole.network.DeviceRegistrationRequest
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -4,18 +4,27 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
-    // Using Android emulator default loopback address to connect to host dev machine
-    private const val BASE_URL = "http://192.168.1.26:8000"
+    private var baseUrl: String? = null
+    private var _apiService: ApiService? = null
+    private var _webSocketManager: WebSocketManager? = null
 
-    val apiService: ApiService by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
+    val isInitialized: Boolean get() = baseUrl != null
+
+    val apiService: ApiService
+        get() = _apiService ?: throw IllegalStateException("RetrofitClient not initialized")
+        
+    val webSocketManager: WebSocketManager
+        get() = _webSocketManager ?: throw IllegalStateException("RetrofitClient not initialized")
+
+    fun initialize(ip: String) {
+        baseUrl = "http://$ip:8000/"
+        _apiService = Retrofit.Builder()
+            .baseUrl(baseUrl!!)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApiService::class.java)
-    }
-
-    val webSocketManager: WebSocketManager by lazy {
-        WebSocketManager(BASE_URL)
+            
+        _webSocketManager?.disconnect()
+        _webSocketManager = WebSocketManager(baseUrl!!)
     }
 }

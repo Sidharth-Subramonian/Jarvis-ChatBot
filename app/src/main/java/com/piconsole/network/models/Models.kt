@@ -57,3 +57,21 @@ data class FindPhoneResponse(
     val success: Boolean,
     val message: String
 )
+
+data class JarvisStatusResponse(
+    val isRunning: Boolean,
+    val enabled: Boolean
+)
+
+data class JarvisToggleResponse(
+    val message: String
+)
+
+data class JarvisCommandRequest(
+    val command: String
+)
+
+data class JarvisCommandResponse(
+    val message: String,
+    val command: String
+)

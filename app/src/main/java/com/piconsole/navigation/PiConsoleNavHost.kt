@@ -21,23 +21,35 @@ import com.piconsole.screens.dashboard.DashboardScreen
 import com.piconsole.screens.media.MediaScreen
 import com.piconsole.screens.memory.MemoryVaultScreen
 import com.piconsole.screens.timers.ClockHubScreen
+import com.piconsole.screens.discovery.DiscoveryScreen
 import com.piconsole.viewmodel.DashboardViewModel
 import com.piconsole.viewmodel.MediaViewModel
 import com.piconsole.viewmodel.ClockViewModel
+import com.piconsole.viewmodel.DiscoveryViewModel
+import com.piconsole.network.RetrofitClient
+import com.piconsole.network.DeviceRegistrationRequest
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import android.util.Log
 
 @Composable
 fun PiConsoleNavHost() {
     val navController = rememberNavController()
 
+    val discoveryViewModel: DiscoveryViewModel = viewModel()
     val dashboardViewModel: DashboardViewModel = viewModel()
     val clockViewModel: ClockViewModel = viewModel()
     val mediaViewModel: MediaViewModel = viewModel()
 
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = navBackStackEntry?.destination
+            if (currentRoute != NavRoutes.Discovery.route) {
+                NavigationBar {
 
                 val items = listOf(
                     Triple(NavRoutes.Dashboard.route, "Dashboard", Icons.Default.Home),
@@ -50,7 +62,7 @@ fun PiConsoleNavHost() {
                     NavigationBarItem(
                         icon = { Icon(icon, contentDescription = label) },
                         label = { Text(label) },
-                        selected = currentDestination?.hierarchy?.any { it.route == route } == true,
+                        selected = currentRoute == route,
                         onClick = {
                             navController.navigate(route) {
                                 // Pop up to the start destination of the graph to
@@ -68,14 +80,41 @@ fun PiConsoleNavHost() {
                         }
                     )
                 }
+                }
             }
         }
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = NavRoutes.Dashboard.route,
+            startDestination = NavRoutes.Discovery.route,
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable(NavRoutes.Discovery.route) { 
+                DiscoveryScreen(
+                    viewModel = discoveryViewModel,
+                    onDeviceSelected = { device ->
+                        RetrofitClient.initialize(device.ip)
+                        
+                        // Register FCM token now that Retrofit is initialized
+                        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                val token = task.result
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    try {
+                                        RetrofitClient.apiService.registerDevice(DeviceRegistrationRequest(token, android.os.Build.MODEL))
+                                    } catch (e: Exception) {
+                                        Log.e("NavHost", "Failed to register FCM", e)
+                                    }
+                                }
+                            }
+                        }
+
+                        navController.navigate(NavRoutes.Dashboard.route) {
+                            popUpTo(NavRoutes.Discovery.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
             composable(NavRoutes.Dashboard.route) { DashboardScreen(dashboardViewModel) }
             composable(NavRoutes.Timers.route) { ClockHubScreen(clockViewModel) }
             composable(NavRoutes.Media.route) { MediaScreen(mediaViewModel) }

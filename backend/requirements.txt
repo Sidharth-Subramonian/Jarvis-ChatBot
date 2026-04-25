@@ -16,4 +16,5 @@ openwakeword
 faster-whisper
 piper-tts
 pyaudio
-
+firebase-admin
+zeroconf

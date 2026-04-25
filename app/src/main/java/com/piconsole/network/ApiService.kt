@@ -3,6 +3,11 @@ package com.piconsole.network
 import com.piconsole.network.models.*
 import retrofit2.http.*
 
+data class DeviceRegistrationRequest(
+    val token: String,
+    val deviceName: String
+)
+
 interface ApiService {
     @GET("status")
     suspend fun getStatus(): StatusResponse
@@ -39,4 +44,16 @@ interface ApiService {
 
     @POST("mute")
     suspend fun mute(): StatusResponse
+
+    @GET("jarvis/status")
+    suspend fun getJarvisStatus(): JarvisStatusResponse
+
+    @POST("jarvis/toggle")
+    suspend fun toggleJarvis(): JarvisToggleResponse
+
+    @POST("jarvis/command")
+    suspend fun sendJarvisCommand(@Body request: JarvisCommandRequest): JarvisCommandResponse
+
+    @POST("register-device")
+    suspend fun registerDevice(@Body request: DeviceRegistrationRequest): StatusResponse
 }

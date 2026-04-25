@@ -4,9 +4,9 @@
     
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
         <!-- Set the splash screen background -->
-        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <item name="windowSplashScreenBackground">#11121C</item>
         <!-- Set the splash screen icon -->
-        <item name="windowSplashScreenAnimatedIcon">@android:drawable/sym_def_app_icon</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo</item>
         <!-- Set the post-splash theme -->
         <item name="postSplashScreenTheme">@style/Theme.PiConsole</item>
     </style>

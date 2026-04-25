@@ -106,7 +106,13 @@ def _build_gemini_tools() -> list:
         "parameters": {"type": "OBJECT", "properties": {}}
     }
     
-    return [ha_tool, music_tool, stop_music_tool]
+    find_phone_tool = {
+        "name": "find_phone",
+        "description": "Rings the user's phone to help them find it when they ask where their phone is.",
+        "parameters": {"type": "OBJECT", "properties": {}}
+    }
+    
+    return [ha_tool, music_tool, stop_music_tool, find_phone_tool]
 
 
 def _handle_gemini_tool_call(fn_name: str, fn_args: dict, chat_session) -> tuple[str, bool]:
@@ -134,6 +140,18 @@ def _handle_gemini_tool_call(fn_name: str, fn_args: dict, chat_session) -> tuple
         elif fn_name == "stop_music":
             result = stop_music()
             return result, True
+            
+        elif fn_name == "find_phone":
+            try:
+                import requests
+                resp = requests.post("http://localhost:8000/find-phone", timeout=5)
+                if resp.json().get("success"):
+                    return "I am ringing your phone now, sir.", True
+                else:
+                    return "I'm sorry sir, but I couldn't ring your phone. The device may not be registered.", True
+            except Exception as e:
+                logger.error(f"Error calling find-phone API: {e}")
+                return "I encountered an error trying to ring your phone.", True
         
         else:
             logger.warning(f"Unknown tool called: {fn_name}")
@@ -163,7 +181,7 @@ def _handle_groq_fallback(history: List[Dict]) -> str:
             "content": (
                 f"You are Jarvis, a concise AI assistant. Current time: {fresh_time}. "
                 "For device control, respond with: 'EXECUTE: [type], [device], [action]'. "
-                "Example: 'EXECUTE: fan, sidhu fan, on' or 'EXECUTE: music, play, song name'. "
+                "Example: 'EXECUTE: fan, sidhu fan, on', 'EXECUTE: music, play, song name', or 'EXECUTE: phone, my phone, find'. "
                 "For chat, just respond naturally."
             )
         }
@@ -189,6 +207,10 @@ def _handle_groq_fallback(history: List[Dict]) -> str:
                         return result
                     elif parts[1].lower() == "stop":
                         return stop_music()
+                elif parts[0].lower() == "phone" and parts[2].lower() == "find":
+                    import requests
+                    requests.post("http://localhost:8000/find-phone", timeout=5)
+                    return "I am ringing your phone now, sir."
                 else:
                     result = control_home_assistant(parts[0], parts[1], parts[2])
                     return result

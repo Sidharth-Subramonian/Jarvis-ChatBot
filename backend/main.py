@@ -7,13 +7,24 @@ import socket
 import time
 import asyncio
 import os
+import socket
 from contextlib import asynccontextmanager
+from zeroconf import ServiceInfo, Zeroconf
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlmodel import SQLModel, Field, Session, select, create_engine
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 import pygame
 import threading
 import sys
+import firebase_admin
+from firebase_admin import credentials, messaging
+
+# Initialize Firebase Admin
+try:
+    cred = credentials.Certificate(os.path.join(os.path.dirname(__file__), "firebase-adminsdk.json"))
+    firebase_admin.initialize_app(cred)
+except Exception as e:
+    print(f"Failed to initialize Firebase Admin SDK: {e}")
 
 # Add jarvis to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), 'jarvis'))
@@ -32,6 +43,7 @@ current_media_state = {
     "currentTrack": None,
     "volume": 0.5
 }
+fcm_token = None
 
 
 # Database Setup
@@ -75,12 +87,47 @@ class SoundManager:
 sound_manager = SoundManager()
 scheduler = AsyncIOScheduler()
 
+# Zeroconf Registration
+zeroconf = Zeroconf()
+service_info = None
+
+def register_zeroconf():
+    global service_info
+    ip = "127.0.0.1"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        pass
+
+    desc = {'model': 'Raspberry Pi 4', 'name': socket.gethostname()}
+    service_info = ServiceInfo(
+        "_piconsole._tcp.local.",
+        f"{socket.gethostname()}._piconsole._tcp.local.",
+        addresses=[socket.inet_aton(ip)],
+        port=8000,
+        properties=desc,
+        server=f"{socket.gethostname()}.local."
+    )
+    zeroconf.register_service(service_info)
+    print(f"Zeroconf service registered at {ip}:8000")
+
+def unregister_zeroconf():
+    global service_info
+    if service_info:
+        zeroconf.unregister_service(service_info)
+        zeroconf.close()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     scheduler.start()
+    register_zeroconf()
     yield
     scheduler.shutdown()
+    unregister_zeroconf()
 
 app = FastAPI(title="PiConsole Backend", lifespan=lifespan)
 
@@ -135,6 +182,10 @@ class StatusResponse(BaseModel):
     ramUsage: float
     temperature: float
     isOnline: bool
+
+class DeviceRegistrationRequest(BaseModel):
+    token: str
+    deviceName: str
 
 # Connection Manager for WebSockets
 class ConnectionManager:
@@ -330,10 +381,29 @@ async def control_media(request: MediaRequest):
 
 @app.post("/find-phone")
 async def find_phone():
-    # In a pro version, this sends an FCM message.
-    # For now, we simulate the logic.
-    print("Sending 'Ring' command to phone...")
-    return {"success": True, "message": "Phone is ringing"}
+    global fcm_token
+    if not fcm_token:
+        print("No device registered to ring.")
+        return {"success": False, "message": "No device registered"}
+    
+    try:
+        message = messaging.Message(
+            data={"action": "find_phone"},
+            token=fcm_token,
+        )
+        response = messaging.send(message)
+        print(f"Successfully sent FCM message: {response}")
+        return {"success": True, "message": "Phone is ringing via FCM"}
+    except Exception as e:
+        print(f"Error sending FCM message: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/register-device")
+async def register_device(request: DeviceRegistrationRequest):
+    global fcm_token
+    fcm_token = request.token
+    print(f"Registered FCM token for {request.deviceName}: {fcm_token}")
+    return {"message": "Device registered successfully", "success": True}
 
 @app.post("/reboot")
 async def reboot():

@@ -34,9 +34,10 @@ class MusicPlayer:
         logger.info(f"Starting playback: {query}")
         
         cmd = (
-            f'yt-dlp --js-runtimes node --remote-components ejs:github '
-            f'--format ba -g "ytsearch1:{query}" | '
-            f'xargs mpv --no-video --volume=100 --input-ipc-server=/tmp/mpvsocket'
+            f'yt-dlp --format ba -g "ytsearch1:{query}" | '
+            f'xargs mpv --no-video --volume=100 '
+            f'--ao=alsa --audio-device=alsa/hw:2,0 '
+            f'--input-ipc-server=/tmp/mpvsocket'
         )
         
         try:
@@ -48,6 +49,7 @@ class MusicPlayer:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
+            logger.info(f"Music process started (PID: {self.process.pid})")
             return f"Playing {query} now, sir."
         except Exception as e:
             logger.error(f"Failed to start music playback: {e}")

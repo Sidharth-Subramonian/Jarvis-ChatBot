@@ -226,12 +226,17 @@ class VoiceSystem:
         # Use aplay with explicit headphones device (hw:2,0)
         command = (
             f'echo "{text}" | piper --model {TTS_MODEL} '
-            f'--output_raw | aplay -D hw:2,0 -r {TTS_SAMPLE_RATE} -f S16_LE -t raw 2>/dev/null'
+            f'--output_raw | aplay -D hw:2,0 -r {TTS_SAMPLE_RATE} -f S16_LE -t raw'
         )
         
         try:
-            subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, timeout=30)
-            logger.debug(f"Spoke: {text[:50]}...")
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True, timeout=30
+            )
+            if result.returncode != 0:
+                logger.error(f"TTS command failed (exit {result.returncode}): {result.stderr.strip()}")
+            else:
+                logger.debug(f"Spoke: {text[:50]}...")
         except Exception as e:
             logger.error(f"Text-to-speech error: {e}")
         finally:

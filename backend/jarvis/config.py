@@ -62,7 +62,8 @@ STT_MODEL = "base"
 STT_COMPUTE_TYPE = "int8"
 STT_BEAM_SIZE = 3
 STT_LANGUAGE = "en"
-TTS_MODEL = "./piper/en_GB-alan-medium.onnx"
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TTS_MODEL = os.path.join(_SCRIPT_DIR, "piper", "en_GB-alan-medium.onnx")
 TTS_SAMPLE_RATE = 22050
 
 # ============================================================================

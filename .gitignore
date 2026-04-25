@@ -5,6 +5,17 @@ __pycache__/
 .venv/
 env/
 venv/
+*.onnx
+# Piper TTS voices and binaries
+backend/piper/
+piper_voices/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
 .env
 
 # Android / Gradle

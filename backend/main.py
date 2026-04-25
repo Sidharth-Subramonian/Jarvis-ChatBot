@@ -250,6 +250,7 @@ class StopwatchResponse(BaseModel):
 class MediaRequest(BaseModel):
     action: str
     volume: Optional[float] = None
+    query: Optional[str] = None
 
 class MediaResponse(BaseModel):
     status: str
@@ -597,22 +598,29 @@ async def control_stopwatch(request: StopwatchAction):
 
 @app.post("/media", response_model=MediaResponse)
 async def control_media(request: MediaRequest):
-    global current_media_state
+    from jarvis.music_bot import play_music, stop_music, toggle_pause, set_volume, get_current_state
     
     if request.action == "play":
-        current_media_state["status"] = "playing"
-        if not current_media_state["currentTrack"]:
-            current_media_state["currentTrack"] = "Lo-Fi Beats"
+        if request.query:
+            play_music(request.query)
+        else:
+            toggle_pause()
     elif request.action == "pause":
-        current_media_state["status"] = "paused"
+        toggle_pause()
+    elif request.action == "stop":
+        stop_music()
     elif request.action in ("next", "prev"):
-        current_media_state["status"] = "playing"
-        current_media_state["currentTrack"] = f"Track {int(time.time()) % 100}"
+        # Just play something random or a default lo-fi for now
+        play_music("lo-fi beats")
     elif request.action == "volume":
         if request.volume is not None:
-            current_media_state["volume"] = request.volume
+            set_volume(int(request.volume * 100))
 
-    return MediaResponse(**current_media_state)
+    state = get_current_state()
+    # Broadcast media update
+    await manager.broadcast({"type": "media_update", "data": state})
+    
+    return MediaResponse(**state)
 
 @app.post("/find-phone")
 async def find_phone():

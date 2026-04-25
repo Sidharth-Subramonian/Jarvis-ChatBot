@@ -17,14 +17,37 @@ class MediaViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    fun sendMediaAction(action: String, volume: Float? = null) {
+    init {
+        listenForMediaEvents()
+    }
+
+    private fun listenForMediaEvents() {
         viewModelScope.launch {
             try {
-                val response = RetrofitClient.apiService.controlMedia(MediaRequest(action, volume))
+                RetrofitClient.webSocketManager.clockEvents.collect { event ->
+                    if (event.type == "media_update") {
+                        val status = event.data["status"] as? String ?: ""
+                        val track = event.data["currentTrack"] as? String
+                        val volume = (event.data["volume"] as? Double)?.toFloat()
+                        _mediaState.value = MediaResponse(status, track, volume)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun sendMediaAction(action: String, volume: Float? = null, query: String? = null) {
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.apiService.controlMedia(MediaRequest(action, volume, query))
                 _mediaState.value = response
             } catch (e: Exception) {
                 _error.value = "Failed to send media action: ${e.message}"
             }
         }
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 }

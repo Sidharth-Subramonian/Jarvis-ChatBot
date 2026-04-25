@@ -13,6 +13,9 @@ class MusicPlayer:
         """Initialize music player with no active process."""
         self.process: Optional[subprocess.Popen] = None
         self.current_query: Optional[str] = None
+        self.volume: int = 100
+        self.is_paused: bool = False
+        self.socket_path = "/tmp/mpvsocket"
     
     def play(self, query: str) -> str:
         """
@@ -49,11 +52,49 @@ class MusicPlayer:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
+            self.is_paused = False
             logger.info(f"Music process started (PID: {self.process.pid})")
             return f"Playing {query} now, sir."
         except Exception as e:
             logger.error(f"Failed to start music playback: {e}")
             return f"Failed to play music: {str(e)}"
+
+    def _send_mpv_command(self, command: list) -> bool:
+        """Send a JSON command to mpv via socket."""
+        if not self.is_playing():
+            return False
+        
+        try:
+            import json
+            import socket
+            
+            if not os.path.exists(self.socket_path):
+                return False
+                
+            payload = json.dumps({"command": command}) + "\n"
+            
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.connect(self.socket_path)
+                client.sendall(payload.encode())
+            return True
+        except Exception as e:
+            logger.error(f"Error sending command to mpv: {e}")
+            return False
+
+    def toggle_pause(self) -> str:
+        """Toggle play/pause."""
+        self.is_paused = not self.is_paused
+        state = "yes" if self.is_paused else "no"
+        if self._send_mpv_command(["set_property", "pause", self.is_paused]):
+            return "Music paused." if self.is_paused else "Music resumed."
+        return "Failed to toggle playback."
+
+    def set_volume(self, volume: int) -> str:
+        """Set volume (0-100)."""
+        self.volume = max(0, min(100, volume))
+        if self._send_mpv_command(["set_property", "volume", self.volume]):
+            return f"Volume set to {self.volume}%."
+        return "Failed to set volume."
     
     def stop(self) -> str:
         """
@@ -140,6 +181,26 @@ def is_playing() -> bool:
         True if music is currently playing
     """
     return _player.is_playing()
+
+
+def toggle_pause() -> str:
+    """Public interface to toggle pause."""
+    return _player.toggle_pause()
+
+
+def set_volume(volume: int) -> str:
+    """Public interface to set volume."""
+    return _player.set_volume(volume)
+
+
+def get_current_state() -> dict:
+    """Public interface to get current player state."""
+    return {
+        "status": "playing" if _player.is_playing() else "stopped",
+        "is_paused": _player.is_paused,
+        "currentTrack": _player.current_query,
+        "volume": _player.volume / 100.0
+    }
 
 
 def cleanup_music() -> None:

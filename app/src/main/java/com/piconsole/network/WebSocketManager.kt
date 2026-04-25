@@ -54,7 +54,8 @@ class WebSocketManager(private val baseUrl: String) {
                             _statusUpdate.value = status
                         }
                         "timer_created", "timer_fired", "timer_deleted",
-                        "alarm_created", "alarm_fired", "alarm_deleted" -> {
+                        "alarm_created", "alarm_fired", "alarm_deleted",
+                        "media_update" -> {
                             @Suppress("UNCHECKED_CAST")
                             val data = wrapper["data"] as? Map<String, Any> ?: emptyMap()
                             _clockEvents.tryEmit(ClockEvent(type, data))

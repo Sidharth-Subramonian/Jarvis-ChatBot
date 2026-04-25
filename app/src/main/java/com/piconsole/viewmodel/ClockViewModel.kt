@@ -1,6 +1,5 @@
 package com.piconsole.viewmodel
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.piconsole.network.RetrofitClient
@@ -9,9 +8,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType
 import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody
 import java.io.File
 
 class ClockViewModel : ViewModel() {
@@ -145,7 +144,8 @@ class ClockViewModel : ViewModel() {
     fun uploadRingtone(file: File) {
         viewModelScope.launch {
             try {
-                val requestBody = file.asRequestBody("audio/*".toMediaTypeOrNull())
+                val mediaType = MediaType.parse("audio/*")
+                val requestBody = RequestBody.create(mediaType, file)
                 val part = MultipartBody.Part.createFormData("file", file.name, requestBody)
                 RetrofitClient.apiService.uploadRingtone(part)
                 fetchRingtones() // Refresh list

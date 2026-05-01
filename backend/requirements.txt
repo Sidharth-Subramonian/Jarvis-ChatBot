@@ -9,12 +9,11 @@ sqlmodel>=0.0.16
 python-multipart>=0.0.9
 google-genai
 python-dotenv
-openai
+groq
 ddgs
 pytz
 openwakeword
-faster-whisper
-piper-tts
+
 pyaudio
 firebase-admin
 zeroconf

@@ -8,15 +8,14 @@ import numpy as np
 import openwakeword
 import time
 from openwakeword.model import Model
-from faster_whisper import WhisperModel
 import subprocess
+import tempfile
 from typing import Optional
 
 from config import (
     SAMPLE_RATE, CHUNK_SIZE, SILENCE_LIMIT, VOLUME_THRESHOLD,
     MAX_WAIT_TIME, MIN_SPEECH_TIME, WAKE_WORD, WAKE_WORD_THRESHOLD,
-    STT_MODEL, STT_COMPUTE_TYPE, STT_BEAM_SIZE, STT_LANGUAGE,
-    TTS_MODEL, TTS_SAMPLE_RATE, logger
+    groq_client, logger
 )
 
 # --- SILENCE ALSA WARNINGS ---
@@ -37,15 +36,10 @@ class VoiceSystem:
     """
     
     def __init__(self):
-        """Initialize audio system, wake word model, and speech-to-text engine."""
+        """Initialize audio system, wake word model, and Groq API client."""
         logger.info("Initializing Jarvis's Senses...")
         
         self.temp_file = "command.wav"
-        
-        # Load Faster-Whisper (Optimized for RPi4)
-        self.stt_model: WhisperModel = WhisperModel(
-            STT_MODEL, device="cpu", compute_type=STT_COMPUTE_TYPE
-        )
         
         # Load openWakeWord
         try:
@@ -177,7 +171,7 @@ class VoiceSystem:
 
     def transcribe(self, file_path: str) -> str:
         """
-        Converts audio file to text using Faster-Whisper.
+        Converts audio file to text using Groq Whisper API.
         
         Args:
             file_path: Path to WAV file to transcribe
@@ -185,22 +179,20 @@ class VoiceSystem:
         Returns:
             Transcribed text
         """
-        hint_prompt = (
-            "Arijit Singh, Bollywood, Hindi songs, Indian music titles, "
-            "AR Rahman, Pritam, Kesariya, Choley Jeye Na, Kollywood, Tamil Songs"
-        )
-
         try:
-            segments, info = self.stt_model.transcribe(
-                file_path, 
-                beam_size=STT_BEAM_SIZE,
-                initial_prompt=hint_prompt, 
-                vad_filter=True,
-                language=STT_LANGUAGE
-            )
+            with open(file_path, "rb") as audio_file:
+                transcription = groq_client.audio.transcriptions.create(
+                    file=(file_path, audio_file.read()),
+                    model="whisper-large-v3-turbo",
+                    response_format="text",
+                    language="en",
+                    prompt=(
+                        "Arijit Singh, Bollywood, Hindi songs, Indian music titles, "
+                        "AR Rahman, Pritam, Kesariya, Choley Jeye Na, Kollywood, Tamil Songs"
+                    )
+                )
             
-            text = " ".join([segment.text for segment in segments])
-            result = text.strip()
+            result = transcription.strip() if isinstance(transcription, str) else str(transcription).strip()
             logger.info(f"Transcribed: {result}")
             return result
         except Exception as e:
@@ -212,7 +204,7 @@ class VoiceSystem:
 
     def speak(self, text: str) -> None:
         """
-        Convert text to speech and play through speakers.
+        Convert text to speech using Groq Orpheus TTS and play through speakers.
         Pauses music during playback.
         
         Args:
@@ -223,24 +215,41 @@ class VoiceSystem:
             
         self.stream.stop_stream()
         
-        # Use aplay with explicit headphones device (hw:2,0)
-        command = (
-            f'echo "{text}" | piper --model {TTS_MODEL} '
-            f'--output_raw | aplay -D hw:2,0 -r {TTS_SAMPLE_RATE} -f S16_LE -t raw'
-        )
-        
+        tmp_wav = None
         try:
+            # Generate speech via Groq Orpheus TTS
+            response = groq_client.audio.speech.create(
+                model="playai-tts",
+                voice="Fritz-PlayAI",
+                input=text,
+                response_format="wav"
+            )
+            
+            # Write to a temp file
+            tmp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            response.write_to_file(tmp_wav.name)
+            tmp_wav.close()
+            
+            # Play through speakers using aplay (hw:2,0 = headphone jack)
+            play_cmd = f'aplay -D hw:2,0 {tmp_wav.name}'
             result = subprocess.run(
-                command, shell=True, capture_output=True, text=True, timeout=30
+                play_cmd, shell=True, capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
-                logger.error(f"TTS command failed (exit {result.returncode}): {result.stderr.strip()}")
+                logger.error(f"aplay failed (exit {result.returncode}): {result.stderr.strip()}")
             else:
                 logger.debug(f"Spoke: {text[:50]}...")
         except Exception as e:
             logger.error(f"Text-to-speech error: {e}")
         finally:
-            time.sleep(1)
+            # Clean up temp wav
+            if tmp_wav and os.path.exists(tmp_wav.name):
+                try:
+                    os.remove(tmp_wav.name)
+                except Exception:
+                    pass
+            
+            time.sleep(0.5)
             
             # Clear buffers after speaking
             for mdl in self.oww_model.prediction_buffer.keys():

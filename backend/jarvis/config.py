@@ -1,7 +1,7 @@
 import os
 import logging
 from google import genai
-from openai import OpenAI
+from groq import Groq
 from dotenv import load_dotenv
 
 # Global runtime control
@@ -58,13 +58,6 @@ MIN_SPEECH_TIME = 1.2  # minimum seconds of speech
 # ============================================================================
 WAKE_WORD = "hey_jarvis"
 WAKE_WORD_THRESHOLD = 0.85
-STT_MODEL = "base"
-STT_COMPUTE_TYPE = "int8"
-STT_BEAM_SIZE = 3
-STT_LANGUAGE = "en"
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-TTS_MODEL = os.path.join(_SCRIPT_DIR, "piper", "en_GB-alan-medium.onnx")
-TTS_SAMPLE_RATE = 22050
 
 # ============================================================================
 # SESSION CONFIGURATION
@@ -112,8 +105,7 @@ except Exception as e:
     raise
 
 try:
-    groq_client = OpenAI(
-        base_url="https://api.groq.com/openai/v1",
+    groq_client = Groq(
         api_key=GROQ_KEY
     )
     logger.info("Groq client initialized successfully")

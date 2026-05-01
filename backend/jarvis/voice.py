@@ -219,8 +219,8 @@ class VoiceSystem:
         try:
             # Generate speech via Groq Orpheus TTS
             response = groq_client.audio.speech.create(
-                model="playai-tts",
-                voice="Fritz-PlayAI",
+                model="canopylabs/orpheus-v1-english",
+                voice="troy",
                 input=text,
                 response_format="wav"
             )

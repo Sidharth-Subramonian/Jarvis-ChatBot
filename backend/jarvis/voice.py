@@ -12,9 +12,10 @@ import subprocess
 import tempfile
 from typing import Optional
 
+import config as cfg
 from config import (
     SAMPLE_RATE, CHUNK_SIZE, SILENCE_LIMIT, VOLUME_THRESHOLD,
-    MAX_WAIT_TIME, MIN_SPEECH_TIME, WAKE_WORD, WAKE_WORD_THRESHOLD,
+    MAX_WAIT_TIME, MIN_SPEECH_TIME, WAKE_WORD_THRESHOLD,
     groq_client, logger
 )
 
@@ -43,10 +44,25 @@ class VoiceSystem:
         
         # Load openWakeWord
         try:
-            self.oww_model = Model(wakeword_models=[WAKE_WORD])
+            self.oww_model = Model(wakeword_models=[cfg.WAKE_WORD])
         except TypeError:
-            logger.warning("openWakeWord version mismatch, using default model loading")
-            self.oww_model = Model()
+            try:
+                # Newer versions renamed the parameter
+                self.oww_model = Model(wakeword_model_paths=[cfg.WAKE_WORD])
+            except TypeError:
+                logger.warning("openWakeWord: falling back to default model loading")
+                self.oww_model = Model()
+        
+        # Verify wake word is loaded
+        if cfg.WAKE_WORD not in self.oww_model.prediction_buffer:
+            available = list(self.oww_model.prediction_buffer.keys())
+            logger.warning(f"Wake word '{cfg.WAKE_WORD}' not in loaded models. Available: {available}")
+            # Try to find a matching model (e.g. "hey jarvis" vs "hey_jarvis")
+            for key in available:
+                if "jarvis" in key.lower():
+                    logger.info(f"Using '{key}' as wake word instead of '{cfg.WAKE_WORD}'")
+                    cfg.WAKE_WORD = key
+                    break
             
         self.pa = pyaudio.PyAudio()
         self.stream = self.pa.open(
@@ -78,11 +94,11 @@ class VoiceSystem:
                 
                 self.oww_model.predict(audio_data)
                 
-                if WAKE_WORD in self.oww_model.prediction_buffer:
-                    score = self.oww_model.prediction_buffer[WAKE_WORD][-1]
+                if cfg.WAKE_WORD in self.oww_model.prediction_buffer:
+                    score = self.oww_model.prediction_buffer[cfg.WAKE_WORD][-1]
                     
                     if score > WAKE_WORD_THRESHOLD:
-                        logger.info(f"Wake word detected: {WAKE_WORD} (Score: {score:.2f})")
+                        logger.info(f"Wake word detected: {cfg.WAKE_WORD} (Score: {score:.2f})")
                         self._purge_pipeline()
                         return True
             except Exception as e:
@@ -219,8 +235,8 @@ class VoiceSystem:
         try:
             # Generate speech via Groq Orpheus TTS
             response = groq_client.audio.speech.create(
-                model="playai-tts",
-                voice="Fritz-PlayAI",
+                model="canopylabs/orpheus-v1-english",
+                voice="troy",
                 input=text,
                 response_format="wav"
             )
